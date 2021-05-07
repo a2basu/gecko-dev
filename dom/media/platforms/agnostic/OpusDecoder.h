@@ -10,7 +10,14 @@
 
 #  include "mozilla/Maybe.h"
 #  include "nsTArray.h"
-
+#include "mozilla/rlbox/rlbox_config.h"
+//#  include "mozilla/rlbox/rlbox_lucet_sandbox.hpp"
+#  include "mozilla/rlbox/rlbox_noop_sandbox.hpp"
+#include "mozilla/rlbox/rlbox.hpp"
+#define RLBOX_SINGLE_THREADED_INVOCATIONS
+#define RLBOX_USE_STATIC_CALLS() rlbox_noop_sandbox_lookup_symbol
+using namespace rlbox;
+using rlbox_sandbox_opus = rlbox::rlbox_sandbox<rlbox_noop_sandbox>;
 struct OpusMSDecoder;
 
 namespace mozilla {
@@ -45,8 +52,12 @@ class OpusDataDecoder : public MediaDataDecoder,
   static void AppendCodecDelay(MediaByteBuffer* config, uint64_t codecDelayUS);
 
  private:
+  static rlbox_sandbox_opus* CreateSandbox();
+  struct SandboxDestroy {
+    void operator()(rlbox_sandbox_opus* sandbox);
+  };
+  std::unique_ptr<rlbox_sandbox_opus, SandboxDestroy> mSandbox;
   nsresult DecodeHeader(const unsigned char* aData, size_t aLength);
-
   const AudioInfo mInfo;
   nsCOMPtr<nsISerialEventTarget> mThread;
 

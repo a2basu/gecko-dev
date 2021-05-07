@@ -24,11 +24,17 @@ extern "C" {
 #define OPUS_DEBUG(arg, ...)                                           \
   DDMOZ_LOG(sPDMLog, mozilla::LogLevel::Debug, "::%s: " arg, __func__, \
             ##__VA_ARGS__)
+//-------------- AYUSH chnages -------//
+#include <iostream>
+#include <unistd.h>
+using namespace std;
 
+//------------- ----------------------//
 namespace mozilla {
 
 OpusDataDecoder::OpusDataDecoder(const CreateDecoderParams& aParams)
-    : mInfo(aParams.AudioConfig()),
+    : mSandbox(CreateSandbox()),
+      mInfo(aParams.AudioConfig()),
       mOpusDecoder(nullptr),
       mSkip(0),
       mDecodedHeader(false),
@@ -70,6 +76,7 @@ RefPtr<MediaDataDecoder::InitPromise> OpusDataDecoder::Init() {
             RESULT_DETAIL("CodecSpecificConfig too short to read codecDelay!")),
         __func__);
   }
+  cerr << "------ ayush - opus decoder init : PID: " << getpid() << " TID: "<< " --------" << endl;
   int64_t codecDelay = BigEndian::readUint64(p);
   length -= sizeof(uint64_t);
   p += sizeof(uint64_t);
@@ -367,5 +374,29 @@ bool OpusDataDecoder::IsOpus(const nsACString& aMimeType) {
   return aMimeType.EqualsLiteral("audio/opus");
 }
 
+//---------- AYUSH CHANGES -------------//
+rlbox_sandbox_opus* OpusDataDecoder::CreateSandbox() {
+  rlbox_sandbox_opus* sandbox = new rlbox_sandbox_opus();
+//#ifdef MOZ_WASM_SANDBOXING_OGG
+  // Firefox preloads the library externally to ensure we won't be stopped
+  //   // by the content sandbox
+//  const bool external_loads_exist = true;
+  //       // See Bug 1606981: In some environments allowing stdio in the wasm sandbox
+  //         // fails as the I/O redirection involves querying meta-data of file
+  //           // descriptors. This querying fails in some environments.
+//  const bool allow_stdio = false;
+//  sandbox->create_sandbox(mozilla::ipc::GetSandboxedOggPath().get(),
+//      external_loads_exist, allow_stdio);
+//#else
+  sandbox->create_sandbox();
+//#endif
+  return sandbox;
+}
+
+void OpusDataDecoder::SandboxDestroy::operator()(rlbox_sandbox_opus* sandbox) {
+  sandbox->destroy_sandbox();
+  delete sandbox;
+}
+//------------- AYUSH CHANGES ------------------
 }  // namespace mozilla
 #undef OPUS_DEBUG
