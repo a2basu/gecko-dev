@@ -10,14 +10,18 @@
 
 #  include "mozilla/Maybe.h"
 #  include "nsTArray.h"
+
+#define RLBOX_SINGLE_THREADED_INVOCATIONS
+#define RLBOX_USE_STATIC_CALLS() rlbox_noop_sandbox_lookup_symbol
+
 #include "mozilla/rlbox/rlbox_config.h"
 //#  include "mozilla/rlbox/rlbox_lucet_sandbox.hpp"
 #  include "mozilla/rlbox/rlbox_noop_sandbox.hpp"
 #include "mozilla/rlbox/rlbox.hpp"
-#define RLBOX_SINGLE_THREADED_INVOCATIONS
-#define RLBOX_USE_STATIC_CALLS() rlbox_noop_sandbox_lookup_symbol
 using namespace rlbox;
 using rlbox_sandbox_opus = rlbox::rlbox_sandbox<rlbox_noop_sandbox>;
+using rlbox_opus_sandbox_type = rlbox::rlbox_noop_sandbox;
+
 struct OpusMSDecoder;
 
 namespace mozilla {
@@ -63,7 +67,7 @@ class OpusDataDecoder : public MediaDataDecoder,
 
   // Opus decoder state
   UniquePtr<OpusParser> mOpusParser;
-  OpusMSDecoder* mOpusDecoder;
+  tainted<OpusMSDecoder*, rlbox_opus_sandbox_type> mOpusDecoder;
 
   uint16_t mSkip;  // Samples left to trim before playback.
   bool mDecodedHeader;
