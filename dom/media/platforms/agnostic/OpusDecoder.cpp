@@ -262,12 +262,12 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
   
   // Decode to the appropriate sample type.
 #ifdef MOZ_SAMPLE_TYPE_FLOAT32
-  auto t_buffer = mSandbox->malloc_in_sandbox<opus_val16>(frames * channels);
+  auto t_buffer = mSandbox->malloc_in_sandbox<float>(frames * channels);
   auto ret = mSandbox->invoke_sandbox_function(opus_multistream_decode_float, mOpusDecoder, t_aSampleData,
                                           aSample->Size(), t_buffer, frames,
                                           false);
 #else
-  auto t_buffer = mSandbox->malloc_in_sandbox<opus_val16>(frames * channels);
+  auto t_buffer = mSandbox->malloc_in_sandbox<uint16_t>(frames * channels);
   auto ret = mSandbox->invoke_sandbox_function(
       opus_multistream_decode, mOpusDecoder, t_aSampleData, aSample->Size(),
                               t_buffer, frames, false);
