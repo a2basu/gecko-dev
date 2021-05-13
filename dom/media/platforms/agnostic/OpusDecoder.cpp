@@ -262,18 +262,19 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
   
   // Decode to the appropriate sample type.
 #ifdef MOZ_SAMPLE_TYPE_FLOAT32
-  auto t_buffer = mSandbox->malloc_in_sandbox<opus_val16>(frames * channels);
+  auto t_buffer = mSandbox->malloc_in_sandbox<float>(frames * channels);
   auto ret = mSandbox->invoke_sandbox_function(opus_multistream_decode_float, mOpusDecoder, t_aSampleData,
                                           aSample->Size(), t_buffer, frames,
                                           false);
 #else
-  auto t_buffer = mSandbox->malloc_in_sandbox<opus_val16>(frames * channels);
+  auto t_buffer = mSandbox->malloc_in_sandbox<uint16_t>(frames * channels);
   auto ret = mSandbox->invoke_sandbox_function(
       opus_multistream_decode, mOpusDecoder, t_aSampleData, aSample->Size(),
                               t_buffer, frames, false);
 #endif
-  memcpy(buffer.get(), t_buffer.unverified_safe_pointer_because(
-        frames*channels, "decoded data"), frames*channels);
+  //memcpy(buffer.get(), t_buffer.unverified_safe_pointer_because(
+  //      frames*channels, "decoded data"), frames*channels);
+  auto buffer_try = t_buffer.unverified_safe_pointer_because(frames*channels, "trying out sandboxing");
   if (ret.unverified_safe_because("trying out sandboxing") < 0) {
     return DecodePromise::CreateAndReject(
         MediaResult(NS_ERROR_DOM_MEDIA_DECODE_ERR,
@@ -292,7 +293,7 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
     int32_t skipFrames = std::min<int32_t>(mSkip, frames);
     int32_t keepFrames = frames - skipFrames;
     OPUS_DEBUG("Opus decoder skipping %d of %d frames", skipFrames, frames);
-    PodMove(buffer.get(), buffer.get() + skipFrames * channels,
+    PodMove(buffer_try, buffer_try + skipFrames * channels,
             keepFrames * channels);
     startTime = startTime + FramesToTimeUnit(skipFrames, mOpusParser->mRate);
     frames = keepFrames;
@@ -324,7 +325,7 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
     float gain = mOpusParser->mGain;
     uint32_t samples = frames * channels;
     for (uint32_t i = 0; i < samples; i++) {
-      buffer[i] *= gain;
+      buffer_try[i] *= gain;
     }
   }
 #else
@@ -365,7 +366,7 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
   buffer.SetLength(frames * channels);
 
   return DecodePromise::CreateAndResolve(
-      DecodedData{new AudioData(aSample->mOffset, time, std::move(buffer),
+      DecodedData{new AudioData(aSample->mOffset, time, std::move(static_cast<AlignedAudioBuffer>(buffer_try)),
                                 mOpusParser->mChannels, mOpusParser->mRate,
                                 mChannelMap)},
       __func__);
