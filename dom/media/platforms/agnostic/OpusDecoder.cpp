@@ -290,7 +290,7 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
     int32_t skipFrames = std::min<int32_t>(mSkip, frames);
     int32_t keepFrames = frames - skipFrames;
     OPUS_DEBUG("Opus decoder skipping %d of %d frames", skipFrames, frames);
-    PodMove(buffer_try, buffer_try + skipFrames * channels,
+    PodMove(buffer.get(), buffer.get() + skipFrames * channels,
             keepFrames * channels);
     startTime = startTime + FramesToTimeUnit(skipFrames, mOpusParser->mRate);
     frames = keepFrames;
@@ -322,7 +322,7 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
     float gain = mOpusParser->mGain;
     uint32_t samples = frames * channels;
     for (uint32_t i = 0; i < samples; i++) {
-      buffer_try[i] *= gain;
+      buffer[i] *= gain;
     }
   }
 #else
@@ -363,7 +363,7 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
   buffer.SetLength(frames * channels);
 
   return DecodePromise::CreateAndResolve(
-      DecodedData{new AudioData(aSample->mOffset, time, std::move(static_cast<AlignedAudioBuffer>(buffer_try)),
+      DecodedData{new AudioData(aSample->mOffset, time, std::move(buffer),
                                 mOpusParser->mChannels, mOpusParser->mRate,
                                 mChannelMap)},
       __func__);
