@@ -253,15 +253,9 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
         __func__);
   }
 
-  AlignedAudioBuffer buffer(frames * channels);
-  if (!buffer) {
-    return DecodePromise::CreateAndReject(
-        MediaResult(NS_ERROR_OUT_OF_MEMORY, __func__), __func__);
-  }
-
-  
   // Decode to the appropriate sample type.
 #ifdef MOZ_SAMPLE_TYPE_FLOAT32
+  /* tainted<void*, rlbox_noop_sandbox> tainted_p = tainted<void*, rlbox_noop_sandbox>::UNSAFE_accept_pointer(some_void_ptr); */
   auto t_buffer = mSandbox->malloc_in_sandbox<float>(frames * channels);
   auto ret = mSandbox->invoke_sandbox_function(opus_multistream_decode_float, mOpusDecoder, t_aSampleData,
                                           aSample->Size(), t_buffer, frames,
@@ -272,9 +266,13 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
       opus_multistream_decode, mOpusDecoder, t_aSampleData, aSample->Size(),
                               t_buffer, frames, false);
 #endif
-  memcpy(buffer.get(), t_buffer.unverified_safe_pointer_because(
-        frames*channels, "decoded data"), frames*channels);
-  if (ret.unverified_safe_because("trying out sandboxing") < 0) {
+
+  AlignedAudioBuffer buffer(t_buffer.unverified_safe_pointer_because(frames*channels, "trying out sandboxing"), frames * channels);
+  if (!buffer) {
+    return DecodePromise::CreateAndReject(
+        MediaResult(NS_ERROR_OUT_OF_MEMORY, __func__), __func__);
+  }
+  if (ret.unverified_safe_because("trying sndbxing") < 0) {
     return DecodePromise::CreateAndReject(
         MediaResult(NS_ERROR_DOM_MEDIA_DECODE_ERR,
                     RESULT_DETAIL("Opus decoding error:%d", ret)),
@@ -284,7 +282,7 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
   mSandbox->free_in_sandbox(t_aSampleData);
   t_buffer = nullptr;
   t_aSampleData = nullptr;
-  NS_ASSERTION(ret.unverified_safe_because("trying out sandboxing") == frames, "Opus decoded too few audio samples");
+  NS_ASSERTION(ret.unverified_safe_because("trying sndbxing") == frames, "Opus decoded too few audio samples");
   auto startTime = aSample->mTime;
 
   // Trim the initial frames while the decoder is settling.
