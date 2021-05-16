@@ -9,6 +9,7 @@ EXPORTS += [
     "agnostic/BlankDecoderModule.h",
     "agnostic/DummyMediaDataDecoder.h",
     "agnostic/OpusDecoder.h",
+    "agnostic/RLBoxOpus.h",
     "agnostic/TheoraDecoder.h",
     "agnostic/VorbisDecoder.h",
     "agnostic/VPXDecoder.h",

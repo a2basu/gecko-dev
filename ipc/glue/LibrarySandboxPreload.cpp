@@ -56,6 +56,11 @@ nsAutoCString GetSandboxedHunspellPath() {
       nsLiteralCString(MOZ_DLL_PREFIX "hunspellwasm" MOZ_DLL_SUFFIX));
 }
 
+nsAutoCString GetSandboxedOpusPath() {
+  return GetSandboxedPath(
+      nsLiteralCString(MOZ_DLL_PREFIX "opuswasm" MOZ_DLL_SUFFIX));
+}
+
 PRLibrary* PreloadLibrary(const nsAutoCString& path) {
   PRLibSpec libSpec;
   libSpec.type = PR_LibSpec_Pathname;
@@ -83,6 +88,11 @@ void PreloadSandboxedDynamicLibraries() {
 #  if defined(MOZ_WASM_SANDBOXING_HUNSPELL)
   if (!PreloadLibrary(GetSandboxedHunspellPath())) {
     MOZ_CRASH("Library preload failure: Failed to load libhunspell\n");
+  }
+#  endif
+#  if defined(MOZ_WASM_SANDBOXING_OPUS)
+  if (!PreloadLibrary(GetSandboxedOpusPath())) {
+    MOZ_CRASH("Library preload failure: Failed to load libopus\n");
   }
 #  endif
 #endif

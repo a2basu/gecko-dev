@@ -24,12 +24,12 @@ extern "C" {
 #define OPUS_DEBUG(arg, ...)                                           \
   DDMOZ_LOG(sPDMLog, mozilla::LogLevel::Debug, "::%s: " arg, __func__, \
             ##__VA_ARGS__)
-//-------------- AYUSH chnages -------//
+
+//Remove after all cerrs are removed.
 #include <iostream>
 #include <unistd.h>
 using namespace std;
 
-//------------- ----------------------//
 namespace mozilla {
 
 OpusDataDecoder::OpusDataDecoder(const CreateDecoderParams& aParams)
@@ -135,7 +135,6 @@ RefPtr<MediaDataDecoder::InitPromise> OpusDataDecoder::Init() {
   }
 
   int r = *(t_r.unverified_safe_pointer_because(1, "trying out sandboxing"));
-  if (r == OPUS_OK) cerr << "------ ayush ------ all good in return value from decoder create ----" << endl;
   //free t_r and sandboxedMappingTable
   mSandbox->free_in_sandbox(t_r);
   mSandbox->free_in_sandbox(sandboxedMappingTable);
@@ -394,23 +393,23 @@ bool OpusDataDecoder::IsOpus(const nsACString& aMimeType) {
   return aMimeType.EqualsLiteral("audio/opus");
 }
 
-//---------- AYUSH CHANGES -------------//
 rlbox_sandbox_opus* OpusDataDecoder::CreateSandbox() {
   rlbox_sandbox_opus* sandbox = new rlbox_sandbox_opus();
-//#ifdef MOZ_WASM_SANDBOXING_OGG
-  // Firefox preloads the library externally to ensure we won't be stopped
-  //   // by the content sandbox
-//  const bool external_loads_exist = true;
-  //       // See Bug 1606981: In some environments allowing stdio in the wasm sandbox
-  //         // fails as the I/O redirection involves querying meta-data of file
-  //           // descriptors. This querying fails in some environments.
-//  const bool allow_stdio = false;
-//  sandbox->create_sandbox(mozilla::ipc::GetSandboxedOggPath().get(),
-//      external_loads_exist, allow_stdio);
-//#else
+#ifdef MOZ_WASM_SANDBOXING_OPUS
+// Firefox preloads the library externally to ensure we won't be stopped
+// by the content sandbox
+  const bool external_loads_exist = true;
+  // See Bug 1606981: In some environments allowing stdio in the wasm sandbox
+  // fails as the I/O redirection involves querying meta-data of file
+  // descriptors. This querying fails in some environments.
+  const bool allow_stdio = false;
+  cerr << "----- ayush ----- creating wasm sandbox -----" << endl;
+  sandbox->create_sandbox(mozilla::ipc::GetSandboxedOpusPath().get(),
+      external_loads_exist, allow_stdio);
+#else
   cerr << "----- ayush ----- creating sandbox -----" << endl;
   sandbox->create_sandbox();
-//#endif
+#endif
   return sandbox;
 }
 
@@ -419,6 +418,5 @@ void OpusDataDecoder::SandboxDestroy::operator()(rlbox_sandbox_opus* sandbox) {
   sandbox->destroy_sandbox();
   delete sandbox;
 }
-//------------- AYUSH CHANGES ------------------
 }  // namespace mozilla
 #undef OPUS_DEBUG
