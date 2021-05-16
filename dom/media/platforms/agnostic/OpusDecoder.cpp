@@ -134,13 +134,14 @@ RefPtr<MediaDataDecoder::InitPromise> OpusDataDecoder::Init() {
         "Invalid Opus header: container and codec channels do not match!");
   }
 
-  int r = *(t_r.unverified_safe_pointer_because(1, "trying out sandboxing"));
+  std::unique_ptr<int> r = t_r.copy_and_verify([](std::unique_ptr<int> r) { return r; });
+  if (*r == OPUS_OK) cerr << "------ ayush ------ all good in return value from decoder create ----" << endl;
   //free t_r and sandboxedMappingTable
   mSandbox->free_in_sandbox(t_r);
   mSandbox->free_in_sandbox(sandboxedMappingTable);
   t_r = nullptr;
   sandboxedMappingTable = nullptr;
-  return r == OPUS_OK
+  return *r == OPUS_OK
              ? InitPromise::CreateAndResolve(TrackInfo::kAudioTrack, __func__)
              : InitPromise::CreateAndReject(
                    MediaResult(
@@ -219,7 +220,12 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
   rlbox::memcpy(*mSandbox, t_aSampleData, aSample->Data(), aSample->Size());
   // Maximum value is 63*2880, so there's no chance of overflow.
   int frames_number = mSandbox->invoke_sandbox_function(
-      opus_packet_get_nb_frames, t_aSampleData, aSample->Size()).unverified_safe_because("trying sandboxing");
+      opus_packet_get_nb_frames, t_aSampleData, aSample->Size()).copy_and_verify([](int frames_number) {
+		if (frames_number < 0 || frames_number > (63*2880))
+			return 0;
+		else
+			return frames_number; });
+
   if (frames_number <= 0) {
     OPUS_DEBUG("Invalid packet header: r=%d length=%zu", frames_number,
                aSample->Size());
@@ -231,7 +237,8 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
   }
 
   int samples = mSandbox->invoke_sandbox_function(opus_packet_get_samples_per_frame,
-      t_aSampleData, opus_int32(mOpusParser->mRate)).unverified_safe_because("trying sandboxing");
+      t_aSampleData, opus_int32(mOpusParser->mRate)).copy_and_verify([](int samples) {
+								return samples; });
 
   // A valid Opus packet must be between 2.5 and 120 ms long (48kHz).
   CheckedInt32 totalFrames =
@@ -256,22 +263,24 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
 #ifdef MOZ_SAMPLE_TYPE_FLOAT32
   /* tainted<void*, rlbox_noop_sandbox> tainted_p = tainted<void*, rlbox_noop_sandbox>::UNSAFE_accept_pointer(some_void_ptr); */
   auto t_buffer = mSandbox->malloc_in_sandbox<float>(frames * channels);
-  auto ret = mSandbox->invoke_sandbox_function(opus_multistream_decode_float, mOpusDecoder, t_aSampleData,
-                                          aSample->Size(), t_buffer, frames,
+  auto t_ret = mSandbox->invoke_sandbox_function(opus_multistream_decode_float, mOpusDecoder, t_aSampleData,
+		  aSample->Size(), t_buffer, frames,
                                           false);
 #else
   auto t_buffer = mSandbox->malloc_in_sandbox<uint16_t>(frames * channels);
-  auto ret = mSandbox->invoke_sandbox_function(
+  auto t_ret = mSandbox->invoke_sandbox_function(
       opus_multistream_decode, mOpusDecoder, t_aSampleData, aSample->Size(),
                               t_buffer, frames, false);
 #endif
+
+  int ret = t_ret.copy_and_verify([](int ret) { return ret; });
 
   AlignedAudioBuffer buffer(t_buffer.unverified_safe_pointer_because(frames*channels, "trying out sandboxing"), frames * channels);
   if (!buffer) {
     return DecodePromise::CreateAndReject(
         MediaResult(NS_ERROR_OUT_OF_MEMORY, __func__), __func__);
   }
-  if (ret.unverified_safe_because("trying sndbxing") < 0) {
+  if (ret < 0) {
     return DecodePromise::CreateAndReject(
         MediaResult(NS_ERROR_DOM_MEDIA_DECODE_ERR,
                     RESULT_DETAIL("Opus decoding error:%d", ret)),
@@ -281,7 +290,7 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
   mSandbox->free_in_sandbox(t_aSampleData);
   t_buffer = nullptr;
   t_aSampleData = nullptr;
-  NS_ASSERTION(ret.unverified_safe_because("trying sndbxing") == frames, "Opus decoded too few audio samples");
+  NS_ASSERTION(ret == frames, "Opus decoded too few audio samples");
   auto startTime = aSample->mTime;
 
   // Trim the initial frames while the decoder is settling.
