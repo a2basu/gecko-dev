@@ -28,11 +28,6 @@ extern "C" {
   DDMOZ_LOG(sPDMLog, mozilla::LogLevel::Debug, "::%s: " arg, __func__, \
             ##__VA_ARGS__)
 
-//Remove after all cerrs are removed.
-#include <iostream>
-#include <unistd.h>
-using namespace std;
-
 namespace mozilla {
 
 OpusDataDecoder::OpusDataDecoder(const CreateDecoderParams& aParams)
@@ -79,7 +74,6 @@ RefPtr<MediaDataDecoder::InitPromise> OpusDataDecoder::Init() {
             RESULT_DETAIL("CodecSpecificConfig too short to read codecDelay!")),
         __func__);
   }
-  cerr << "------ ayush - opus decoder init : PID: " << getpid() << " --------" << endl;
   int64_t codecDelay = BigEndian::readUint64(p);
   length -= sizeof(uint64_t);
   p += sizeof(uint64_t);
@@ -96,9 +90,6 @@ RefPtr<MediaDataDecoder::InitPromise> OpusDataDecoder::Init() {
   auto sandboxedMappingTable = mSandbox->malloc_in_sandbox<uint8_t>(mMappingTable.Length());
   rlbox::memcpy(*mSandbox, sandboxedMappingTable, mMappingTable.Elements(), mMappingTable.Length());
 
-  /*mOpusDecoder = opus_multistream_decoder_create(
-      mOpusParser->mRate, mOpusParser->mChannels, mOpusParser->mStreams,
-      mOpusParser->mCoupledStreams, mMappingTable.Elements(), &r);*/
   mOpusDecoder = mSandbox->invoke_sandbox_function(opus_multistream_decoder_create, 
       mOpusParser->mRate, mOpusParser->mChannels, mOpusParser->mStreams, 
       mOpusParser->mCoupledStreams, sandboxedMappingTable, t_r);
@@ -138,7 +129,6 @@ RefPtr<MediaDataDecoder::InitPromise> OpusDataDecoder::Init() {
   }
 
   std::unique_ptr<int> r = t_r.copy_and_verify([](std::unique_ptr<int> r) { return r; });
-  if (*r == OPUS_OK) cerr << "------ ayush ------ all good in return value from decoder create ----" << endl;
   //free t_r and sandboxedMappingTable
   mSandbox->free_in_sandbox(t_r);
   mSandbox->free_in_sandbox(sandboxedMappingTable);
@@ -415,18 +405,15 @@ rlbox_sandbox_opus* OpusDataDecoder::CreateSandbox() {
   // fails as the I/O redirection involves querying meta-data of file
   // descriptors. This querying fails in some environments.
   const bool allow_stdio = false;
-  cerr << "----- ayush ----- creating wasm sandbox -----" << endl;
   sandbox->create_sandbox(mozilla::ipc::GetSandboxedOpusPath().get(),
       external_loads_exist, allow_stdio);
 #else
-  cerr << "----- ayush ----- creating sandbox -----" << endl;
   sandbox->create_sandbox();
 #endif
   return sandbox;
 }
 
 void OpusDataDecoder::SandboxDestroy::operator()(rlbox_sandbox_opus* sandbox) {
-  cerr << "------- ayush ------- destroy sandbox -------" << endl;
   sandbox->destroy_sandbox();
   delete sandbox;
 }
