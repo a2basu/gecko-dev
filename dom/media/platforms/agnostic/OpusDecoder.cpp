@@ -5,6 +5,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "OpusDecoder.h"
+#ifdef MOZ_WASM_SANDBOXING_OPUS
+# include "mozilla/ipc/LibrarySandboxPreload.h"
+#endif
 
 #include <inttypes.h>  // For PRId64
 
