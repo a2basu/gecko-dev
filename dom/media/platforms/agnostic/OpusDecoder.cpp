@@ -4,6 +4,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+//#include <iostream>
+//#include <unistd.h>
+//using namespace std;
+
 #include "OpusDecoder.h"
 #ifdef MOZ_WASM_SANDBOXING_OPUS
 # include "mozilla/ipc/LibrarySandboxPreload.h"
@@ -214,10 +218,12 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
   // Maximum value is 63*2880, so there's no chance of overflow.
   int frames_number = mSandbox->invoke_sandbox_function(
       opus_packet_get_nb_frames, t_aSampleData, aSample->Size()).copy_and_verify([](int frames_number) {
-		if (frames_number < 0 || frames_number > (63*2880))
-			return 0;
+		if (frames_number > 0 && frames_number <= (63*2880))
+			return frames_number;
+		else if (frames_number == OPUS_BAD_ARG || frames_number == OPUS_INVALID_PACKET)
+			return frames_number;
 		else
-			return frames_number; });
+			return OPUS_INVALID_PACKET; });
 
   if (frames_number <= 0) {
     OPUS_DEBUG("Invalid packet header: r=%d length=%zu", frames_number,
@@ -231,7 +237,10 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
 
   int samples = mSandbox->invoke_sandbox_function(opus_packet_get_samples_per_frame,
       t_aSampleData, opus_int32(mOpusParser->mRate)).copy_and_verify([](int samples) {
-								return samples; });
+		if (samples >= 0 || samples == OPUS_INVALID_PACKET)
+			return samples;
+		else
+			return OPUS_INVALID_PACKET; });
 
   // A valid Opus packet must be between 2.5 and 120 ms long (48kHz).
   CheckedInt32 totalFrames =
@@ -407,13 +416,20 @@ rlbox_sandbox_opus* OpusDataDecoder::CreateSandbox() {
   const bool allow_stdio = false;
   sandbox->create_sandbox(mozilla::ipc::GetSandboxedOpusPath().get(),
       external_loads_exist, allow_stdio);
+  //cerr << "PID: " << getpid();
+  //cerr << "Create WASM Sandbox" << endl;
 #else
   sandbox->create_sandbox();
+  //cerr << "PID: " << getpid();
+  //cerr << "Create Noop Sandbox" << endl;
 #endif
   return sandbox;
 }
 
 void OpusDataDecoder::SandboxDestroy::operator()(rlbox_sandbox_opus* sandbox) {
+  //auto& transition_times = sandbox->process_and_get_transition_times();
+  //cerr << "No. of transitions: " << transition_times.size() << endl;
+  //cerr << "Time: " << sandbox->get_total_ns_time_in_sandbox_and_transitions() << endl;
   sandbox->destroy_sandbox();
   delete sandbox;
 }

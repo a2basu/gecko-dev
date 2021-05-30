@@ -30,6 +30,7 @@ struct rlbox_shared_lock {
 // All uses are on the main thread right now, disable rlbox thread checks for
 // performance
 #define RLBOX_SINGLE_THREADED_INVOCATIONS
+//#define RLBOX_MEASURE_TRANSITION_TIMES
 
 // The MingW compiler does not correctly handle static thread_local inline
 // members. This toggles a workaround that allows the host application (firefox)
