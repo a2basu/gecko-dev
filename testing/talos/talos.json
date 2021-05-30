@@ -48,6 +48,9 @@
         "svgr": {
             "tests": ["tsvgx", "tsvgr_opacity", "tscrollx", "tsvg_static", "tart"]
         },
+	"opustest": {
+            "tests": ["opustest"]
+	},
         "perf-reftest": {
             "tests": ["perf_reftest"]
         },

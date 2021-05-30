@@ -895,6 +895,23 @@ class tsvgm(PageloaderTest):
     filters = filter.ignore_first.prepare(2) + filter.median.prepare()
     unit = "ms"
 
+@register_test()
+class opustest(PageloaderTest):
+    """
+    An svg-only number that measures SVG rendering performance
+    for dynamic content only.
+    """
+
+    tpmanifest = "${talos}/tests/svgx/opustest.manifest"
+    tpcycles = 1
+    tppagecycles = 20
+    tpmozafterpaint = False
+    tpchrome = False
+    gecko_profile_interval = 10
+    gecko_profile_entries = 1000000
+    filters = filter.ignore_first.prepare(2) + filter.median.prepare()
+    unit = "ms"
+
 
 @register_test()
 class tsvgx(PageloaderTest):
