@@ -51,6 +51,9 @@
 	"opustest": {
             "tests": ["opustest"]
 	},
+	"opus_perf": {
+            "tests": ["opus_perf"]
+        },
         "perf-reftest": {
             "tests": ["perf_reftest"]
         },

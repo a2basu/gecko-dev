@@ -912,6 +912,22 @@ class opustest(PageloaderTest):
     filters = filter.ignore_first.prepare(2) + filter.median.prepare()
     unit = "ms"
 
+@register_test()
+class opus_perf(PageloaderTest):
+    """
+    Test the bit rate when playing an ogg file
+    """
+    tpmanifest = '${talos}/tests/opus_perf/tests.manifest'
+    tpcycles = 1
+    tploadnocache = True
+    tppagecycles = 5
+    tpmozafterpaint = True
+    gecko_profile_interval = 1
+    gecko_profile_entries = 10000000
+    # filters = filter.ignore_first.prepare(5) + filter.median.prepare()
+    filters = filter.mean.prepare()
+    unit = 'ms'
+    timeout = 72000
 
 @register_test()
 class tsvgx(PageloaderTest):
