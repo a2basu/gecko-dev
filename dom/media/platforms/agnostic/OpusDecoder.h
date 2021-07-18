@@ -10,6 +10,7 @@
 
 #  include "mozilla/Maybe.h"
 #  include "nsTArray.h"
+#  include "RLBoxOpus.h"
 
 struct OpusMSDecoder;
 
@@ -45,14 +46,18 @@ class OpusDataDecoder : public MediaDataDecoder,
   static void AppendCodecDelay(MediaByteBuffer* config, uint64_t codecDelayUS);
 
  private:
+  static rlbox_sandbox_opus* CreateSandbox();
+  struct SandboxDestroy {
+    void operator()(rlbox_sandbox_opus* sandbox);
+  };
+  std::unique_ptr<rlbox_sandbox_opus, SandboxDestroy> mSandbox;
   nsresult DecodeHeader(const unsigned char* aData, size_t aLength);
-
   const AudioInfo mInfo;
   nsCOMPtr<nsISerialEventTarget> mThread;
 
   // Opus decoder state
   UniquePtr<OpusParser> mOpusParser;
-  OpusMSDecoder* mOpusDecoder;
+  rlbox::tainted<OpusMSDecoder*, rlbox_opus_sandbox_type> mOpusDecoder;
 
   uint16_t mSkip;  // Samples left to trim before playback.
   bool mDecodedHeader;

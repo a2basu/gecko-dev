@@ -4,7 +4,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+//#include <iostream>
+//#include <unistd.h>
+//using namespace std;
+
 #include "OpusDecoder.h"
+#ifdef MOZ_WASM_SANDBOXING_OPUS
+# include "mozilla/ipc/LibrarySandboxPreload.h"
+#endif
 
 #include <inttypes.h>  // For PRId64
 
@@ -28,7 +35,8 @@ extern "C" {
 namespace mozilla {
 
 OpusDataDecoder::OpusDataDecoder(const CreateDecoderParams& aParams)
-    : mInfo(aParams.AudioConfig()),
+    : mSandbox(CreateSandbox()),
+      mInfo(aParams.AudioConfig()),
       mOpusDecoder(nullptr),
       mSkip(0),
       mDecodedHeader(false),
@@ -40,7 +48,7 @@ OpusDataDecoder::OpusDataDecoder(const CreateDecoderParams& aParams)
 
 OpusDataDecoder::~OpusDataDecoder() {
   if (mOpusDecoder) {
-    opus_multistream_decoder_destroy(mOpusDecoder);
+    mSandbox->invoke_sandbox_function(opus_multistream_decoder_destroy, mOpusDecoder);
     mOpusDecoder = nullptr;
   }
 }
@@ -82,10 +90,13 @@ RefPtr<MediaDataDecoder::InitPromise> OpusDataDecoder::Init() {
   }
 
   MOZ_ASSERT(mMappingTable.Length() >= uint32_t(mOpusParser->mChannels));
-  int r;
-  mOpusDecoder = opus_multistream_decoder_create(
-      mOpusParser->mRate, mOpusParser->mChannels, mOpusParser->mStreams,
-      mOpusParser->mCoupledStreams, mMappingTable.Elements(), &r);
+  auto t_r = mSandbox->malloc_in_sandbox<int>(1);
+  auto sandboxedMappingTable = mSandbox->malloc_in_sandbox<uint8_t>(mMappingTable.Length());
+  rlbox::memcpy(*mSandbox, sandboxedMappingTable, mMappingTable.Elements(), mMappingTable.Length());
+
+  mOpusDecoder = mSandbox->invoke_sandbox_function(opus_multistream_decoder_create, 
+      mOpusParser->mRate, mOpusParser->mChannels, mOpusParser->mStreams, 
+      mOpusParser->mCoupledStreams, sandboxedMappingTable, t_r);
 
   if (!mOpusDecoder) {
     OPUS_DEBUG("Error creating decoder!");
@@ -101,8 +112,7 @@ RefPtr<MediaDataDecoder::InitPromise> OpusDataDecoder::Init() {
   // of channels are set in AudioSink, using the same method
   // `DecideAudioPlaybackChannels()`, and triggers downmix if needed.
   if (mDefaultPlaybackDeviceMono || DecideAudioPlaybackChannels(mInfo) == 1) {
-    opus_multistream_decoder_ctl(mOpusDecoder,
-                                 OPUS_SET_PHASE_INVERSION_DISABLED(1));
+    mSandbox->invoke_sandbox_function(opus_multistream_decoder_ctl_phase_inversion_set, mOpusDecoder, 1);
   }
 
   mSkip = mOpusParser->mPreSkip;
@@ -110,9 +120,8 @@ RefPtr<MediaDataDecoder::InitPromise> OpusDataDecoder::Init() {
 
   if (codecDelay !=
       FramesToUsecs(mOpusParser->mPreSkip, mOpusParser->mRate).value()) {
-    NS_WARNING(
-        "Invalid Opus header: container CodecDelay and Opus pre-skip do not "
-        "match!");
+    NS_WARNING("Invalid Opus header: CodecDelay and pre-skip do not match!");
+    return InitPromise::CreateAndReject(NS_ERROR_DOM_MEDIA_FATAL_ERR, __func__);
   }
 
   if (mInfo.mRate != (uint32_t)mOpusParser->mRate) {
@@ -123,7 +132,13 @@ RefPtr<MediaDataDecoder::InitPromise> OpusDataDecoder::Init() {
         "Invalid Opus header: container and codec channels do not match!");
   }
 
-  return r == OPUS_OK
+  std::unique_ptr<int> r = t_r.copy_and_verify([](std::unique_ptr<int> r) { return r; });
+  //free t_r and sandboxedMappingTable
+  mSandbox->free_in_sandbox(t_r);
+  mSandbox->free_in_sandbox(sandboxedMappingTable);
+  t_r = nullptr;
+  sandboxedMappingTable = nullptr;
+  return *r == OPUS_OK
              ? InitPromise::CreateAndResolve(TrackInfo::kAudioTrack, __func__)
              : InitPromise::CreateAndReject(
                    MediaResult(
@@ -198,10 +213,18 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
     mFrames = 0;
     mLastFrameTime = Some(aSample->mTime.ToMicroseconds());
   }
-
+  auto t_aSampleData = mSandbox->malloc_in_sandbox<uint8_t>(aSample->Size());
+  rlbox::memcpy(*mSandbox, t_aSampleData, aSample->Data(), aSample->Size());
   // Maximum value is 63*2880, so there's no chance of overflow.
-  int frames_number =
-      opus_packet_get_nb_frames(aSample->Data(), aSample->Size());
+  int frames_number = mSandbox->invoke_sandbox_function(
+      opus_packet_get_nb_frames, t_aSampleData, aSample->Size()).copy_and_verify([](int frames_number) {
+		if (frames_number > 0 && frames_number <= (63*2880))
+			return frames_number;
+		else if (frames_number == OPUS_BAD_ARG || frames_number == OPUS_INVALID_PACKET)
+			return frames_number;
+		else
+			return OPUS_INVALID_PACKET; });
+
   if (frames_number <= 0) {
     OPUS_DEBUG("Invalid packet header: r=%d length=%zu", frames_number,
                aSample->Size());
@@ -212,8 +235,12 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
         __func__);
   }
 
-  int samples = opus_packet_get_samples_per_frame(
-      aSample->Data(), opus_int32(mOpusParser->mRate));
+  int samples = mSandbox->invoke_sandbox_function(opus_packet_get_samples_per_frame,
+      t_aSampleData, opus_int32(mOpusParser->mRate)).copy_and_verify([](int samples) {
+		if (samples >= 0 || samples == OPUS_INVALID_PACKET)
+			return samples;
+		else
+			return OPUS_INVALID_PACKET; });
 
   // A valid Opus packet must be between 2.5 and 120 ms long (48kHz).
   CheckedInt32 totalFrames =
@@ -234,28 +261,37 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
         __func__);
   }
 
-  AlignedAudioBuffer buffer(frames * channels);
+  // Decode to the appropriate sample type.
+#ifdef MOZ_SAMPLE_TYPE_FLOAT32
+  /* tainted<void*, rlbox_noop_sandbox> tainted_p = tainted<void*, rlbox_noop_sandbox>::UNSAFE_accept_pointer(some_void_ptr); */
+  auto t_buffer = mSandbox->malloc_in_sandbox<float>(frames * channels);
+  auto t_ret = mSandbox->invoke_sandbox_function(opus_multistream_decode_float, mOpusDecoder, t_aSampleData,
+		  aSample->Size(), t_buffer, frames,
+                                          false);
+#else
+  auto t_buffer = mSandbox->malloc_in_sandbox<uint16_t>(frames * channels);
+  auto t_ret = mSandbox->invoke_sandbox_function(
+      opus_multistream_decode, mOpusDecoder, t_aSampleData, aSample->Size(),
+                              t_buffer, frames, false);
+#endif
+
+  int ret = t_ret.copy_and_verify([](int ret) { return ret; });
+
+  AlignedAudioBuffer buffer(t_buffer.unverified_safe_pointer_because(frames*channels, "trying out sandboxing"), frames * channels);
   if (!buffer) {
     return DecodePromise::CreateAndReject(
         MediaResult(NS_ERROR_OUT_OF_MEMORY, __func__), __func__);
   }
-
-  // Decode to the appropriate sample type.
-#ifdef MOZ_SAMPLE_TYPE_FLOAT32
-  int ret = opus_multistream_decode_float(mOpusDecoder, aSample->Data(),
-                                          aSample->Size(), buffer.get(), frames,
-                                          false);
-#else
-  int ret =
-      opus_multistream_decode(mOpusDecoder, aSample->Data(), aSample->Size(),
-                              buffer.get(), frames, false);
-#endif
   if (ret < 0) {
     return DecodePromise::CreateAndReject(
         MediaResult(NS_ERROR_DOM_MEDIA_DECODE_ERR,
                     RESULT_DETAIL("Opus decoding error:%d", ret)),
         __func__);
   }
+  mSandbox->free_in_sandbox(t_buffer);
+  mSandbox->free_in_sandbox(t_aSampleData);
+  t_buffer = nullptr;
+  t_aSampleData = nullptr;
   NS_ASSERTION(ret == frames, "Opus decoded too few audio samples");
   auto startTime = aSample->mTime;
 
@@ -356,7 +392,7 @@ RefPtr<MediaDataDecoder::FlushPromise> OpusDataDecoder::Flush() {
 
   MOZ_ASSERT(mOpusDecoder);
   // Reset the decoder.
-  opus_multistream_decoder_ctl(mOpusDecoder, OPUS_RESET_STATE);
+  mSandbox->invoke_sandbox_function(opus_multistream_decoder_ctl_reset, mOpusDecoder, OPUS_RESET_STATE);
   mSkip = mOpusParser->mPreSkip;
   mPaddingDiscarded = false;
   mLastFrameTime.reset();
@@ -368,5 +404,34 @@ bool OpusDataDecoder::IsOpus(const nsACString& aMimeType) {
   return aMimeType.EqualsLiteral("audio/opus");
 }
 
+rlbox_sandbox_opus* OpusDataDecoder::CreateSandbox() {
+  rlbox_sandbox_opus* sandbox = new rlbox_sandbox_opus();
+#ifdef MOZ_WASM_SANDBOXING_OPUS
+// Firefox preloads the library externally to ensure we won't be stopped
+// by the content sandbox
+  const bool external_loads_exist = true;
+  // See Bug 1606981: In some environments allowing stdio in the wasm sandbox
+  // fails as the I/O redirection involves querying meta-data of file
+  // descriptors. This querying fails in some environments.
+  const bool allow_stdio = false;
+  sandbox->create_sandbox(mozilla::ipc::GetSandboxedOpusPath().get(),
+      external_loads_exist, allow_stdio);
+  //cerr << "PID: " << getpid();
+  //cerr << "Create WASM Sandbox" << endl;
+#else
+  sandbox->create_sandbox();
+  //cerr << "PID: " << getpid();
+  //cerr << "Create Noop Sandbox" << endl;
+#endif
+  return sandbox;
+}
+
+void OpusDataDecoder::SandboxDestroy::operator()(rlbox_sandbox_opus* sandbox) {
+  //auto& transition_times = sandbox->process_and_get_transition_times();
+  //cerr << "No. of transitions: " << transition_times.size() << endl;
+  //cerr << "Time: " << sandbox->get_total_ns_time_in_sandbox_and_transitions() << endl;
+  sandbox->destroy_sandbox();
+  delete sandbox;
+}
 }  // namespace mozilla
 #undef OPUS_DEBUG
