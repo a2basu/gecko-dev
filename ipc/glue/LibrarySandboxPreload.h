@@ -8,12 +8,13 @@
 #ifndef ipc_glue_LibrarySandboxPreload_h
 #define ipc_glue_LibrarySandboxPreload_h
 
-#include "nsString.h"
-
 namespace mozilla {
 namespace ipc {
-nsAutoCString GetSandboxedRLBoxPath();
-void PreloadSandboxedDynamicLibrary();
+nsAutoCString GetSandboxedGraphitePath();
+nsAutoCString GetSandboxedOggPath();
+nsAutoCString GetSandboxedHunspellPath();
+nsAutoCString GetSandboxedOpusPath();
+void PreloadSandboxedDynamicLibraries();
 }  // namespace ipc
 }  // namespace mozilla
 #endif
