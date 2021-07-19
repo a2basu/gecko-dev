@@ -418,7 +418,7 @@ rlbox_sandbox_opus* OpusDataDecoder::CreateSandbox() {
   sandbox->create_sandbox(mozilla::ipc::GetSandboxedRLBoxPath().get(),
       external_loads_exist, allow_stdio);
  #else 
-  sandbox->create_sandbox(mozilla::ipc::GetSandboxedRLBoxPath().get())
+  sandbox->create_sandbox(mozilla::ipc::GetSandboxedRLBoxPath().get());
   //cerr << "PID: " << getpid();
   //cerr << "Create WASM Sandbox" << endl;
  #endif

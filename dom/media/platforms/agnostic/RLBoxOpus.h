@@ -13,11 +13,19 @@
 #include "mozilla/rlbox/rlbox_config.h"
 
 #ifdef MOZ_WASM_SANDBOXING_OPUS
-#  include "mozilla/rlbox/rlbox_lucet_sandbox.hpp"
+#  ifdef LUCETC_WASM_SANDBOXING
+#   include "mozilla/rlbox/rlbox_lucet_sandbox.hpp"
 namespace rlbox {
     class rlbox_lucet_sandbox;
 }
 using rlbox_opus_sandbox_type = rlbox::rlbox_lucet_sandbox;
+#else
+#   include "mozilla/rlbox/rlbox_wasm2c_sandbox.hpp"
+namespace rlbox {
+  class rlbox_wasm2c_sandbox;
+}
+using rlbox_opus_sandbox_type = rlbox::rlbox_wasm2c_sandbox;
+# endif
 #else
 #  define RLBOX_USE_STATIC_CALLS() rlbox_noop_sandbox_lookup_symbol
 #  include "mozilla/rlbox/rlbox_noop_sandbox.hpp"
