@@ -2059,6 +2059,7 @@ def wasm_sandboxing_libraries():
         "graphite",
         "ogg",
         "hunspell",
+        "opus"
     )
 
 
