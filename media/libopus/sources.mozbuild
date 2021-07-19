@@ -246,3 +246,10 @@ silk_sources_float = [
     'silk/float/wrappers_FLP.c',
 ]
 
+opus_defines = [
+    ("OPUS_BUILD", True),
+    ("OPUS_VERSION", '"v1.3-rc-19-g5cbd7d5f-mozilla"'),
+    ("USE_ALLOCA", True),
+    ("ENABLE_HARDENING", True)
+]
+
