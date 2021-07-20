@@ -72,5 +72,19 @@ if CONFIG["MOZ_WASM_SANDBOXING_OPUS"]:
         WASM_SOURCES += ["/media/libopus/" + s for s in silk_sources_fixed]
     for k, v in opus_defines:
         WASM_DEFINES[k] = v
+    if CONFIG['OS_ARCH'] in ('Linux', 'Darwin', 'DragonFly', 'FreeBSD',
+                             'NetBSD', 'OpenBSD'):
+        WASM_DEFINES['HAVE_LRINTF'] = True
+    if CONFIG['OS_ARCH'] == 'WINNT':
+        WASM_DEFINES['inline'] = '__inline'
+        if CONFIG['CC_TYPE'] in ('clang', 'gcc'):
+            WASM_DEFINES['HAVE_LRINTF'] = True
+    if CONFIG['OS_ARCH'] == 'AIX':
+        WASM_DEFINES['alloca'] = '__alloca'
+    if CONFIG['OS_ARCH'] == 'SunOS':
+        WASM_DEFINES['HAVE_ALLOCA_H'] = True
+    if not CONFIG['MOZ_SAMPLE_TYPE_FLOAT32']:
+        WASM_DEFINES['FIXED_POINT'] = 1
+        WASM_DEFINES['DISABLE_FLOAT_API'] = True
     LOCAL_INCLUDES += ["/media/libopus/celt", "/media/libopus/include", "/media/libopus/silk",
             "/media/libopus/silk/fixed", "/media/libopus/silk/float", "/media/libopus/src"]
