@@ -251,6 +251,11 @@ opus_defines = [
     ('OPUS_VERSION', '"v1.3-rc-19-g5cbd7d5f-mozilla"'),
     ('USE_ALLOCA', True),
     ('ENABLE_HARDENING', True),
-    ('OPUS_EXPORT', '')
+    ('OPUS_EXPORT', ''),
+    ('HAVE_LRINTF', True)
 ]
+
+if not CONFIG['MOZ_SAMPLE_TYPE_FLOAT32']:
+    opus_defines.append(('FIXED_POINT', 1))
+    opus_defines.append(('DISABLE_FLOAT_API', True))
 

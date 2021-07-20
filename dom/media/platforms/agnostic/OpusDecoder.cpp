@@ -87,7 +87,7 @@ RefPtr<MediaDataDecoder::InitPromise> OpusDataDecoder::Init() {
   }
 
   MOZ_ASSERT(mMappingTable.Length() >= uint32_t(mOpusParser->mChannels));
-  auto t_r = mSandbox->malloc_in_sandbox<int>(1);
+  auto t_r = mSandbox->malloc_in_sandbox<int>();
   auto sandboxedMappingTable = mSandbox->malloc_in_sandbox<uint8_t>(
                                                       mMappingTable.Length());
   rlbox::memcpy(*mSandbox, sandboxedMappingTable, mMappingTable.Elements(),
@@ -288,7 +288,7 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
 
   AlignedAudioBuffer buffer(t_buffer.unverified_safe_pointer_because(
         frames * channels, "Decoded audio output buffer, nothing to be verified"
-        ), frames * channels);
+        ", a copy will be created in AlignedAudioBuffer"), frames * channels);
   if (!buffer) {
     return DecodePromise::CreateAndReject(
         MediaResult(NS_ERROR_OUT_OF_MEMORY, __func__), __func__);
