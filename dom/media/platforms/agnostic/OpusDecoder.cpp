@@ -74,8 +74,11 @@ rlbox_sandbox_opus* OpusDataDecoder::CreateSandbox() {
 }
 
 void OpusDataDecoder::SandboxDestroy::operator()(rlbox_sandbox_opus* sandbox) {
-  sandbox->destroy_sandbox();
-  delete sandbox;
+  if (sandbox) {
+    sandbox->destroy_sandbox();
+    delete sandbox;
+    sandbox = nullptr;
+  }
 }
 
 RefPtr<ShutdownPromise> OpusDataDecoder::Shutdown() {
@@ -115,9 +118,18 @@ RefPtr<MediaDataDecoder::InitPromise> OpusDataDecoder::Init() {
   }
 
   MOZ_ASSERT(mMappingTable.Length() >= uint32_t(mOpusParser->mChannels));
+  
   auto t_r = mSandbox->malloc_in_sandbox<int>();
   auto sandboxedMappingTable = mSandbox->malloc_in_sandbox<uint8_t>(
                                                       mMappingTable.Length());
+  MOZ_ASSERT(!t_r);
+  if (!sandboxedMappingTable) {
+    OPUS_DEBUG("Error allocating memory!");
+    return InitPromise::CreateAndReject(
+        MediaResult(NS_ERROR_OUT_OF_MEMORY, __func__),
+        __func__);
+  }
+
   rlbox::memcpy(*mSandbox, sandboxedMappingTable, mMappingTable.Elements(),
                 mMappingTable.Length());
 
@@ -162,16 +174,15 @@ RefPtr<MediaDataDecoder::InitPromise> OpusDataDecoder::Init() {
         "Invalid Opus header: container and codec channels do not match!");
   }
 
-  std::unique_ptr<int> r = t_r.copy_and_verify([](std::unique_ptr<int> r) { 
-      return r; 
-  });
+  int r = *t_r.unverified_safe_pointer_because(1, "It contains the error code "
+      "from the Opus decoder create call, only checked against OPUS_OK");
 
   mSandbox->free_in_sandbox(t_r);
   mSandbox->free_in_sandbox(sandboxedMappingTable);
   t_r = nullptr;
   sandboxedMappingTable = nullptr;
   
-  return *r == OPUS_OK
+  return r == OPUS_OK
              ? InitPromise::CreateAndResolve(TrackInfo::kAudioTrack, __func__)
              : InitPromise::CreateAndReject(
                    MediaResult(
@@ -247,6 +258,11 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
     mLastFrameTime = Some(aSample->mTime.ToMicroseconds());
   }
   auto t_aSampleData = mSandbox->malloc_in_sandbox<uint8_t>(aSample->Size());
+  if (!t_aSampleData) {
+    return DecodePromise::CreateAndReject(
+        MediaResult(NS_ERROR_OUT_OF_MEMORY, __func__),
+        __func__);
+  }
   rlbox::memcpy(*mSandbox, t_aSampleData, aSample->Data(), aSample->Size());
   // Maximum value is 63*2880, so there's no chance of overflow.
   int frames_number = mSandbox->invoke_sandbox_function(
@@ -302,10 +318,20 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
   // Decode to the appropriate sample type.
 #ifdef MOZ_SAMPLE_TYPE_FLOAT32
   auto t_buffer = mSandbox->malloc_in_sandbox<float>(frames * channels);
+  if (!t_buffer) {
+    return DecodePromise::CreateAndReject(
+        MediaResult(NS_ERROR_OUT_OF_MEMORY, __func__),
+        __func__);
+  }
   auto t_ret = mSandbox->invoke_sandbox_function(opus_multistream_decode_float, 
       mOpusDecoder, t_aSampleData, aSample->Size(), t_buffer, frames, false);
 #else
   auto t_buffer = mSandbox->malloc_in_sandbox<uint16_t>(frames * channels);
+  if (!t_buffer) {
+    return DecodePromise::CreateAndReject(
+        MediaResult(NS_ERROR_OUT_OF_MEMORY, __func__),
+        __func__);
+  }
   auto t_ret = mSandbox->invoke_sandbox_function(opus_multistream_decode,
       mOpusDecoder, t_aSampleData, aSample->Size(), t_buffer, frames, false);
 #endif
