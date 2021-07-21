@@ -8,6 +8,7 @@ with Files('*'):
     BUG_COMPONENT = ('Core', 'Audio/Video')
 
 EXPORTS.opus += [
+    'geckoextra/include/OpusFunctionsForRLBox.h',
     'include/opus.h',
     'include/opus_defines.h',
     'include/opus_multistream.h',

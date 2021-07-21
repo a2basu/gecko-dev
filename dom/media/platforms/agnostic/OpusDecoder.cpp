@@ -22,6 +22,7 @@
 #include "opus/opus.h"
 extern "C" {
 #include "opus/opus_multistream.h"
+#include "opus/OpusFunctionsForRLBox.h"
 }
 
 #define OPUS_DEBUG(arg, ...)                                           \

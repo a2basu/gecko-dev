@@ -68,6 +68,7 @@ celt_sources_arm_ne10 = [
 ]
 
 opus_sources = [
+    'geckoextra/src/OpusFunctionsForRLBox.c',
     'src/mapping_matrix.c',
     'src/opus.c',
     'src/opus_decoder.c',

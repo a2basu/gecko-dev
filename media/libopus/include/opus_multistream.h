@@ -643,10 +643,6 @@ OPUS_EXPORT OPUS_WARN_UNUSED_RESULT int opus_multistream_decode_float(
   */
 OPUS_EXPORT int opus_multistream_decoder_ctl(OpusMSDecoder *st, int request, ...) OPUS_ARG_NONNULL(1);
 
-OPUS_EXPORT int opus_multistream_decoder_ctl_phase_inversion_set(OpusMSDecoder *st, int flag); 
-
-OPUS_EXPORT int opus_multistream_decoder_ctl_reset(OpusMSDecoder *st, int request);
-
 /** Frees an <code>OpusMSDecoder</code> allocated by
   * opus_multistream_decoder_create().
   * @param st <tt>OpusMSDecoder</tt>: Multistream decoder state to be freed.
