@@ -72,5 +72,11 @@ if CONFIG["MOZ_WASM_SANDBOXING_OPUS"]:
         WASM_SOURCES += ["/media/libopus/" + s for s in silk_sources_fixed]
     for k, v in opus_defines:
         WASM_DEFINES[k] = v
-    LOCAL_INCLUDES += ["/media/libopus/celt", "/media/libopus/include", "/media/libopus/silk",
-            "/media/libopus/silk/fixed", "/media/libopus/silk/float", "/media/libopus/src"]
+    LOCAL_INCLUDES += [
+        "/media/libopus/celt",
+        "/media/libopus/include",
+        "/media/libopus/silk",
+        "/media/libopus/silk/fixed",
+        "/media/libopus/silk/float",
+        "/media/libopus/src",
+    ]
