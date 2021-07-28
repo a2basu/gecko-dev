@@ -268,10 +268,11 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
   int frames_number = mSandbox->invoke_sandbox_function(
     opus_packet_get_nb_frames, t_aSampleData, aSample->Size()).copy_and_verify(
       [](int frames_number) {
-          if (frames_number > 0 && frames_number <= (63*2880))
+          //From media/libopus/src/opus_decode.c:995 - max return value
+          //is 63
+          if (frames_number > 0 && frames_number <= 63)
             return frames_number;
-          else if (frames_number == OPUS_BAD_ARG || 
-              frames_number == OPUS_INVALID_PACKET)
+          else if (frames_number == OPUS_BAD_ARG) 
             return frames_number;
           else
             return OPUS_INVALID_PACKET;
@@ -290,7 +291,9 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
   int samples = mSandbox->invoke_sandbox_function(
       opus_packet_get_samples_per_frame, t_aSampleData, 
       opus_int32(mOpusParser->mRate)).copy_and_verify([](int samples) {
-        if (samples >= 0 || samples == OPUS_INVALID_PACKET)
+      // checks if the number of samples returned is non-negative or
+      // marks the value invalid so that error handling can take care of it
+        if (samples >= 0)
           return samples;
         else
           return OPUS_INVALID_PACKET; 
@@ -336,9 +339,9 @@ RefPtr<MediaDataDecoder::DecodePromise> OpusDataDecoder::Decode(
       mOpusDecoder, t_aSampleData, aSample->Size(), t_buffer, frames, false);
 #endif
 
-  int ret = t_ret.copy_and_verify([](int ret) { 
-      return ret; 
-    });
+  int ret = t_ret.unverified_safe_because("decode function returns number of "
+      "samples decoded on success or negative value on error, a check for "
+      "ret being negative is done subsequently");
 
   AlignedAudioBuffer buffer(t_buffer.unverified_safe_pointer_because(
         frames * channels, "Decoded audio output buffer, nothing to be verified"
